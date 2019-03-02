@@ -1658,7 +1658,7 @@ static ssize_t mfrc522_read(FAR struct file *filep, FAR char *buffer,
 	}
       }
     case MFRC522_MODE_MIFARE:
-      mfrc522_mifare_read(dev, dev->block, buffer, buflen);
+      mfrc522_mifare_read(dev, dev->block, buffer, &buflen);
       return buflen;
   }
 
@@ -1691,7 +1691,7 @@ static ssize_t mfrc522_write(FAR struct file *filep, FAR const char *buffer,
   }
 
   mfrc522_picc_select(dev, &uid, 0);
-  return mfrc522_mifare_write(dev, dev->block, buffer, buflen);
+  return mfrc522_mifare_write(dev, dev->block, buffer, (uint8_t *)buflen);
 }
 
 /****************************************************************************
