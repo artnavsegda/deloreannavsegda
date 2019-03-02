@@ -68,7 +68,7 @@ enum mfrc522_state_e
 enum mfrc522_mode_e
 {
   MFRC522_MODE_UID,
-	MFRC522_MODE_MIFARE
+  MFRC522_MODE_MIFARE
 };
 
 struct mfrc522_dev_s;
@@ -83,7 +83,7 @@ struct picc_uid_s
 // A struct used for passing a MIFARE Crypto1 key
 struct MIFARE_Key
 {
-				uint8_t            keyByte[6];
+  uint8_t  keyByte[6];
 };
 
 
