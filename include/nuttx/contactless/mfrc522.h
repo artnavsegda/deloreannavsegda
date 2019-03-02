@@ -68,7 +68,7 @@ enum mfrc522_state_e
 enum mfrc522_mode_e
 {
   MFRC522_MODE_UID,
-	MFRC522_MODE_MILFARE
+	MFRC522_MODE_MIFARE
 };
 
 struct mfrc522_dev_s;
