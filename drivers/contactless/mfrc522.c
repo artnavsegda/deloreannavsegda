@@ -1376,6 +1376,30 @@ int mfrc522_selftest(FAR struct mfrc522_dev_s *dev)
 }
 
 /****************************************************************************
+ * Name: mfrc522_mifare_read
+ *
+ * Description:
+ *   Reads 16 bytes (+ 2 bytes CRC_A) from the active PICC.
+ *
+ ****************************************************************************/
+
+ int mfrc522_mifare_read(FAR struct mfrc522_dev_s *dev, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize)
+ {
+	 int result;
+
+	 // Sanity check
+	 if (buffer == NULL || *bufferSize < 18) {
+		 return ENOBUFS;
+	 }
+
+	 // Build command buffer
+	 buffer[0] = PICC_CMD_MF_READ;
+	 buffer[1] = blockAddr;
+	 // Calculate CRC_A
+	 result = mfrc522_calc_crc(dev, buffer, 2, &buffer[2]);
+ }
+
+/****************************************************************************
  * Name: mfrc522_open
  *
  * Description:
