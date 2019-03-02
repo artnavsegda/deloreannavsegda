@@ -1629,38 +1629,38 @@ static ssize_t mfrc522_read(FAR struct file *filep, FAR char *buffer,
 
   if (!mfrc522_picc_detect(dev))
   {
-		mfrc522err("Card is not present!\n");
-		return -EAGAIN;
-	}
+    mfrc522err("Card is not present!\n");
+    return -EAGAIN;
+  }
 
-	mfrc522_picc_select(dev, &uid, 0);
+  mfrc522_picc_select(dev, &uid, 0);
 
-	switch (dev->mode)
+  switch (dev->mode)
+  {
+    case MFRC522_MODE_UID:
+      /* Now read the UID */
+      if (uid.sak != 0)
+      {
+        if (buffer)
 	{
-		case MFRC522_MODE_UID:
-  		/* Now read the UID */
-		  if (uid.sak != 0)
-			{
-				if (buffer)
-				{
-					char hextext[3];
-					buffer[0] = '0';
-					buffer[1] = 'x';
-					buflen = 2;
-					for (int i=0; i<uid.size; i++)
-					{
-						snprintf(hextext, 2, "%02X", uid.uid_data[i]);
-						buffer[2+(i*2)]=hextext[0];
-						buffer[3+(i*2)]=hextext[1];
-						buflen += 2;
-					}
-					return buflen;
-		    }
-			}
-		case MFRC522_MODE_MIFARE:
-			mfrc522_mifare_read(dev, dev->block, buffer, buflen);
-			return buflen;
+          char hextext[3];
+          buffer[0] = '0';
+          buffer[1] = 'x';
+          buflen = 2;
+          for (int i=0; i<uid.size; i++)
+          {
+            snprintf(hextext, 2, "%02X", uid.uid_data[i]);
+            buffer[2+(i*2)]=hextext[0];
+	    buffer[3+(i*2)]=hextext[1];
+	    buflen += 2;
+	  }
+	  return buflen;
 	}
+      }
+    case MFRC522_MODE_MIFARE:
+      mfrc522_mifare_read(dev, dev->block, buffer, buflen);
+      return buflen;
+  }
 
   return OK;
 }
@@ -1682,15 +1682,15 @@ static ssize_t mfrc522_write(FAR struct file *filep, FAR const char *buffer,
   DEBUGASSERT(inode && inode->i_private);
   dev = inode->i_private;
 
-	/* Is a card near? */
+  /* Is a card near? */
 
   if (!mfrc522_picc_detect(dev))
   {
-		mfrc522err("Card is not present!\n");
-		return -EAGAIN;
-	}
+    mfrc522err("Card is not present!\n");
+    return -EAGAIN;
+  }
 
-	mfrc522_picc_select(dev, &uid, 0);
+  mfrc522_picc_select(dev, &uid, 0);
   return mfrc522_mifare_write(dev, dev->block, buffer, buflen);
 }
 
@@ -1729,21 +1729,21 @@ static int mfrc522_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
       ret = dev->state;
       break;
 
-		case MFRC522IOC_SET_MODE:
-	    dev->mode = arg;
-	    break;
+    case MFRC522IOC_SET_MODE:
+      dev->mode = arg;
+      break;
 
-		case MFRC522IOC_SET_BLOCK:
-			dev->block = arg;
-			break;
+    case MFRC522IOC_SET_BLOCK:
+      dev->block = arg;
+      break;
 
-		case MFRC522IOC_AUTH:
-			{
-				struct picc_uid_s uid;
-				struct MIFARE_Key key = { .keyByte = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} };
-				mfrc522_authenticate(dev, PICC_CMD_MF_AUTH_KEY_A, 1, &key, &uid);
-			}
-			break;
+    case MFRC522IOC_AUTH:
+    {
+      struct picc_uid_s uid;
+      struct MIFARE_Key key = { .keyByte = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} };
+      mfrc522_authenticate(dev, PICC_CMD_MF_AUTH_KEY_A, 1, &key, &uid);
+    }
+      break;
 
     default:
       mfrc522err("ERROR: Unrecognized cmd: %d\n", cmd);
