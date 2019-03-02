@@ -1376,28 +1376,136 @@ int mfrc522_selftest(FAR struct mfrc522_dev_s *dev)
 }
 
 /****************************************************************************
+ * Name: mfrc522_mifare_transceive
+ *
+ * Description:
+ *   Wrapper for MIFARE protocol communication.
+ *
+ * Adds CRC_A, executes the Transceive command and checks that the response is MF_ACK or a timeout.
+ *
+ ****************************************************************************/
+
+int mfrc522_mifare_transceive(FAR struct mfrc522_dev_s *dev, uint8_t *sendData, uint8_t sendLen, uint8_t acceptTimeout)
+{
+	int result;
+	uint8_t cmdBuffer[18]; // We need room for 16 bytes data and 2 bytes CRC_A.
+
+	// Sanity check
+	if (sendData == NULL || sendLen < 16) {
+		return EINVAL;
+	}
+
+	// Copy sendData[] to cmdBuffer[] and add CRC_A
+	memcpy(cmdBuffer, sendData, sendLen);
+	result = mfrc522_calc_crc(dev, cmdBuffer, sendLen, &cmdBuffer[sendLen]);
+	if (result != OK) {
+		return result;
+	}
+	sendLen += 2;
+
+	// Transceive the data, store the reply in cmdBuffer[]
+	uint8_t waitIRq = 0x30; // RxIRq and IdleIRq
+	uint8_t cmdBufferSize = sizeof(cmdBuffer);
+	uint8_t validBits = 0;
+	result = mfrc522_comm_picc(dev, MFRC522_TRANSCV_CMD, waitIRq, cmdBuffer, sendLen, cmdBuffer, &cmdBufferSize, &validBits, 0, false);
+	if (acceptTimeout && result == ETIMEDOUT) {
+		return OK;
+	}
+	if (result != OK) {
+		return result;
+	}
+	// The PICC must reply with a 4 bit ACK
+	if (cmdBufferSize != 1 || validBits != 4) {
+		return EPROTO;
+	}
+	if (cmdBuffer[0] != 0xA) {
+		return EPROTO;
+	}
+	return OK;
+}
+
+/****************************************************************************
  * Name: mfrc522_mifare_read
  *
  * Description:
  *   Reads 16 bytes (+ 2 bytes CRC_A) from the active PICC.
  *
+ * For MIFARE Classic the sector containing the block must be authenticated before calling this function.
+ *
+ * For MIFARE Ultralight only addresses 00h to 0Fh are decoded.
+ * The MF0ICU1 returns a NAK for higher addresses.
+ * The MF0ICU1 responds to the READ command by sending 16 bytes starting from the page address defined by the command argument.
+ * For example; if blockAddr is 03h then pages 03h, 04h, 05h, 06h are returned.
+ * A roll-back is implemented: If blockAddr is 0Eh, then the contents of pages 0Eh, 0Fh, 00h and 01h are returned.
+ *
+ * The buffer must be at least 18 bytes because a CRC_A is also returned.
+ * Checks the CRC_A before returning OK.
+ *
  ****************************************************************************/
 
- int mfrc522_mifare_read(FAR struct mfrc522_dev_s *dev, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize)
- {
-	 int result;
+int mfrc522_mifare_read(FAR struct mfrc522_dev_s *dev, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize)
+{
+	int result;
 
-	 // Sanity check
-	 if (buffer == NULL || *bufferSize < 18) {
-		 return ENOBUFS;
-	 }
+	// Sanity check
+	if (buffer == NULL || *bufferSize < 18) {
+		return ENOBUFS;
+	}
 
-	 // Build command buffer
-	 buffer[0] = PICC_CMD_MF_READ;
-	 buffer[1] = blockAddr;
-	 // Calculate CRC_A
-	 result = mfrc522_calc_crc(dev, buffer, 2, &buffer[2]);
- }
+	// Build command buffer
+	buffer[0] = PICC_CMD_MF_READ;
+	buffer[1] = blockAddr;
+	// Calculate CRC_A
+	result = mfrc522_calc_crc(dev, buffer, 2, &buffer[2]);
+	if (result != OK) {
+		return result;
+	}
+
+	// Transmit the buffer and receive the response, validate CRC_A.
+	return mfrc522_transcv_data(dev, buffer, 4, buffer, bufferSize, NULL, 0, true);
+}
+
+/****************************************************************************
+ * Name: mfrc522_mifare_write
+ *
+ * Description:
+ *   Writes 16 bytes to the active PICC.
+ *
+ * For MIFARE Classic the sector containing the block must be authenticated before calling this function.
+ *
+ * For MIFARE Ultralight the operation is called "COMPATIBILITY WRITE".
+ * Even though 16 bytes are transferred to the Ultralight PICC, only the least significant 4 bytes (bytes 0 to 3)
+ * are written to the specified address. It is recommended to set the remaining bytes 04h to 0Fh to all logic 0.
+ *
+ ****************************************************************************/
+
+int mfrc522_mifare_write(FAR struct mfrc522_dev_s *dev, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize)
+{
+	int result;
+
+	// Sanity check
+	if (buffer == NULL || *bufferSize < 16) {
+		return EINVAL;
+	}
+
+	// Mifare Classic protocol requires two communications to perform a write.
+	// Step 1: Tell the PICC we want to write to block blockAddr.
+	uint8_t cmdBuffer[2];
+	cmdBuffer[0] = PICC_CMD_MF_WRITE;
+	cmdBuffer[1] = blockAddr;
+	result = mfrc522_mifare_transceive(dev, cmdBuffer, 2, false); // Adds CRC_A and checks that the response is MF_ACK.
+	if (result != OK) {
+		return result;
+	}
+
+	// Step 2: Transfer the data
+	result = mfrc522_mifare_transceive(dev, buffer, *bufferSize, false); // Adds CRC_A and checks that the response is MF_ACK.
+	if (result != OK) {
+		return result;
+	}
+
+	return OK;
+}
 
 /****************************************************************************
  * Name: mfrc522_open
