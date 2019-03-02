@@ -51,18 +51,21 @@
 
 #define MFRC522IOC_GET_PICC_UID         _CLIOC(0x0001)
 #define MFRC522IOC_GET_STATE            _CLIOC(0x0002)
+#define MFRC522IOC_AUTH	                _CLIOC(0x0003)
+#define MFRC522IOC_SET_MODE	            _CLIOC(0x0004)
+#define MFRC522IOC_SET_BLOCK						_CLIOC(0x0005)
 
 /* PN532 IOCTL Commands *****************************************************/
 
-#define PN532IOC_SET_SAM_CONF           _CLIOC(0x0003)
-#define PN532IOC_READ_PASSIVE           _CLIOC(0x0004)
-#define PN532IOC_SET_RF_CONF            _CLIOC(0x0005)
-#define PN532IOC_SEND_CMD_READ_PASSIVE  _CLIOC(0x0006)
-#define PN532IOC_GET_DATA_READY         _CLIOC(0x0007)
-#define PN532IOC_GET_TAG_ID             _CLIOC(0x0008)
-#define PN532IOC_GET_STATE              _CLIOC(0x0009)
-#define PN532IOC_READ_TAG_DATA          _CLIOC(0x000a)
-#define PN532IOC_WRITE_TAG_DATA         _CLIOC(0x000b)
+#define PN532IOC_SET_SAM_CONF           _CLIOC(0x0013)
+#define PN532IOC_READ_PASSIVE           _CLIOC(0x0014)
+#define PN532IOC_SET_RF_CONF            _CLIOC(0x0015)
+#define PN532IOC_SEND_CMD_READ_PASSIVE  _CLIOC(0x0016)
+#define PN532IOC_GET_DATA_READY         _CLIOC(0x0017)
+#define PN532IOC_GET_TAG_ID             _CLIOC(0x0018)
+#define PN532IOC_GET_STATE              _CLIOC(0x0019)
+#define PN532IOC_READ_TAG_DATA          _CLIOC(0x001a)
+#define PN532IOC_WRITE_TAG_DATA         _CLIOC(0x001b)
 
 /****************************************************************************
  * Public Types

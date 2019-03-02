@@ -65,6 +65,12 @@ enum mfrc522_state_e
   MFRC522_STATE_DATA_READY,
 };
 
+enum mfrc522_mode_e
+{
+  MFRC522_MODE_UID,
+	MFRC522_MODE_MILFARE
+};
+
 struct mfrc522_dev_s;
 
 struct picc_uid_s
@@ -73,6 +79,13 @@ struct picc_uid_s
   uint8_t  uid_data[10];
   uint8_t  sak;          /* The SAK (Select Acknowledge) return by the PICC */
 };
+
+// A struct used for passing a MIFARE Crypto1 key
+struct MIFARE_Key
+{
+				uint8_t            keyByte[6];
+};
+
 
 /****************************************************************************
  * Public Functions

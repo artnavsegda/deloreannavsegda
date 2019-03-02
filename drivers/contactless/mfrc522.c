@@ -1376,6 +1376,45 @@ int mfrc522_selftest(FAR struct mfrc522_dev_s *dev)
 }
 
 /****************************************************************************
+ * Name: mfrc522_authenticate
+ *
+ * Description:
+ *   Executes the MFRC522 MFAuthent command.
+ *
+ * This command manages MIFARE authentication to enable a secure communication to any MIFARE Mini, MIFARE 1K and MIFARE 4K card.
+ * The authentication is described in the MFRC522 datasheet section 10.3.1.9 and http://www.nxp.com/documents/data_sheet/MF1S503x.pdf section 10.1.
+ * For use with MIFARE Classic PICCs.
+ * The PICC must be selected - ie in state ACTIVE(*) - before calling this function.
+ * Remember to call PCD_StopCrypto1() after communicating with the authenticated PICC - otherwise no new communications can start.
+ *
+ * All keys are set to FFFFFFFFFFFFh at chip delivery.
+ *
+ ****************************************************************************/
+
+int mfrc522_authenticate(FAR struct mfrc522_dev_s *dev, uint8_t command, uint8_t blockAddr, struct MIFARE_Key *key, struct picc_uid_s *uid)
+{
+	uint8_t waitIRq = 0x10; // IdleIRq
+
+	// Build command buffer
+	uint8_t sendData[12];
+	sendData[0] = command;
+	sendData[1] = blockAddr;
+	for (uint8_t i = 0; i < 6; i++) { // 6 key bytes
+		sendData[2+i] = key->keyByte[i];
+	}
+	// Use the last uid bytes as specified in http://cache.nxp.com/documents/application_note/AN10927.pdf
+	// section 3.2.5 "MIFARE Classic Authentication".
+	// The only missed case is the MF1Sxxxx shortcut activation,
+	// but it requires cascade tag (CT) byte, that is not part of uid.
+	for (uint8_t i = 0; i < 4; i++) { // The last 4 bytes of the UID
+		sendData[8+i] = uid->uid_data[i+uid->size-4];
+	}
+
+	// Start the authentication.
+	return mfrc522_comm_picc(dev, MFRC522_MF_AUTH_CMD, waitIRq, &sendData[0], sizeof(sendData), 0, NULL, NULL, 0, false);
+}
+
+/****************************************************************************
  * Name: mfrc522_mifare_transceive
  *
  * Description:
@@ -1533,6 +1572,8 @@ static int mfrc522_open(FAR struct file *filep)
   mfrc522_getfwversion(dev);
 
   dev->state = MFRC522_STATE_IDLE;
+	dev->mode = MFRC522_MODE_UID;
+
   return OK;
 }
 
@@ -1587,25 +1628,39 @@ static ssize_t mfrc522_read(FAR struct file *filep, FAR char *buffer,
   /* Is a card near? */
 
   if (!mfrc522_picc_detect(dev))
-    {
-      mfrc522err("Card is not present!\n");
-      return -EAGAIN;
-    }
+  {
+		mfrc522err("Card is not present!\n");
+		return -EAGAIN;
+	}
 
-  /* Now read the UID */
+	mfrc522_picc_select(dev, &uid, 0);
 
-  mfrc522_picc_select(dev, &uid, 0);
-
-  if (uid.sak != 0)
-    {
-      if (buffer)
-        {
-          snprintf(buffer, buflen, "0x%02X%02X%02X%02X",
-                   uid.uid_data[0], uid.uid_data[1],
-                   uid.uid_data[2], uid.uid_data[3]);
-          return buflen;
-        }
-    }
+	switch (dev->mode)
+	{
+		case MFRC522_MODE_UID:
+  		/* Now read the UID */
+		  if (uid.sak != 0)
+			{
+				if (buffer)
+				{
+					char hextext[3];
+					buffer[0] = '0';
+					buffer[1] = 'x';
+					buflen = 2;
+					for (int i=0; i<uid.size; i++)
+					{
+						snprintf(hextext, 2, "%02X", uid.uid_data[i]);
+						buffer[2+(i*2)]=hextext[0];
+						buffer[3+(i*2)]=hextext[1];
+						buflen += 2;
+					}
+					return buflen;
+		    }
+			}
+		case MFRC522_MODE_MILFARE:
+			mfrc522_mifare_read(dev, dev->block, buffer, buflen);
+			return buflen;
+	}
 
   return OK;
 }
@@ -1619,6 +1674,7 @@ static ssize_t mfrc522_write(FAR struct file *filep, FAR const char *buffer,
 {
   FAR struct inode *inode;
   FAR struct mfrc522_dev_s *dev;
+	FAR struct picc_uid_s uid;
 
   DEBUGASSERT(filep);
   inode = filep->f_inode;
@@ -1626,9 +1682,16 @@ static ssize_t mfrc522_write(FAR struct file *filep, FAR const char *buffer,
   DEBUGASSERT(inode && inode->i_private);
   dev = inode->i_private;
 
-  (void)dev;
+	/* Is a card near? */
 
-  return -ENOSYS;
+  if (!mfrc522_picc_detect(dev))
+  {
+		mfrc522err("Card is not present!\n");
+		return -EAGAIN;
+	}
+
+	mfrc522_picc_select(dev, &uid, 0);
+  return mfrc522_mifare_write(dev, dev->block, buffer, buflen);
 }
 
 /****************************************************************************
@@ -1665,6 +1728,22 @@ static int mfrc522_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
     case MFRC522IOC_GET_STATE:
       ret = dev->state;
       break;
+
+		case MFRC522IOC_SET_MODE:
+	    dev->mode = arg;
+	    break;
+
+		case MFRC522IOC_SET_BLOCK:
+			dev->block = arg;
+			break;
+
+		case MFRC522IOC_AUTH:
+			{
+				struct picc_uid_s uid;
+				struct MIFARE_Key key = { .keyByte = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} };
+				mfrc522_authenticate(dev, PICC_CMD_MF_AUTH_KEY_A, 1, &key, &uid);
+			}
+			break;
 
     default:
       mfrc522err("ERROR: Unrecognized cmd: %d\n", cmd);
